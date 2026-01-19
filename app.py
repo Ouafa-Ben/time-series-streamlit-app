@@ -265,6 +265,8 @@ elif step == "4. Modélisation & Ajustement":
                     model = SARIMAX(train, order=(p, d_val, q), seasonal_order=(P, D_val, Q, s)).fit(disp=False)
                 # 🔴 THIS LINE WAS MISSING
                 st.session_state.model_result = model
+                st.session_state.model_type = model_type
+
                 
                 preds = model.get_forecast(steps=len(test)).predicted_mean
                 conf_int = model.get_forecast(steps=len(test)).conf_int()
@@ -341,22 +343,79 @@ elif step == "5. Diagnostic des Résidus":
 # --- 6️⃣ PRÉVISIONS FUTURES ---
 elif step == "6. Prévisions Futures":
     st.title("🔮 6. Prévisions Futures")
+
     if st.session_state.model_result is None:
         st.warning("⚠️ Veuillez d'abord ajuster un modèle.")
     else:
         st.info("🎯 **Objectif** : Projeter la série dans le futur avec des intervalles de confiance.")
+        
         horizon = st.number_input("Horizon de prévision", 1, 100, 24)
+
         if st.button("Générer les Prévisions"):
+
+            ts_full = st.session_state.ts
             result = st.session_state.model_result
-            forecast = result.get_forecast(steps=horizon)
+
+            # 🔁 Refit model on FULL data
+            if st.session_state.model_type == "ARIMA":
+                final_model = ARIMA(
+                    ts_full,
+                    order=result.model.order
+                ).fit()
+            else:
+                final_model = SARIMAX(
+                    ts_full,
+                    order=result.model.order,
+                    seasonal_order=result.model.seasonal_order
+                ).fit(disp=False)
+
+            forecast = final_model.get_forecast(steps=horizon)
             y_pred = forecast.predicted_mean
             conf_int = forecast.conf_int()
+
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=st.session_state.ts.index, y=st.session_state.ts, name="Historique"))
-            fig.add_trace(go.Scatter(x=y_pred.index, y=y_pred, name="Futur", line=dict(color='green', dash='dash')))
-            fig.add_trace(go.Scatter(x=y_pred.index, y=conf_int.iloc[:, 0], line_color='rgba(0,0,0,0)', showlegend=False))
-            fig.add_trace(go.Scatter(x=y_pred.index, y=conf_int.iloc[:, 1], fill='tonexty', fillcolor='rgba(0,255,0,0.1)', line_color='rgba(0,0,0,0)', name="Confiance"))
-            fig.update_layout(yaxis=dict(autorange=True, fixedrange=False))
+
+            # Historique
+            fig.add_trace(go.Scatter(
+                x=ts_full.index,
+                y=ts_full,
+                name="Historique"
+            ))
+
+            # Prévisions
+            fig.add_trace(go.Scatter(
+                x=y_pred.index,
+                y=y_pred,
+                name="Futur",
+                line=dict(color="green", dash="dash")
+            ))
+
+            # Intervalle de confiance
+            fig.add_trace(go.Scatter(
+                x=y_pred.index,
+                y=conf_int.iloc[:, 0],
+                line_color="rgba(0,0,0,0)",
+                showlegend=False
+            ))
+            fig.add_trace(go.Scatter(
+                x=y_pred.index,
+                y=conf_int.iloc[:, 1],
+                fill="tonexty",
+                fillcolor="rgba(0,255,0,0.1)",
+                line_color="rgba(0,0,0,0)",
+                name="Confiance"
+            ))
+
+            fig.update_layout(
+                yaxis=dict(autorange=True, fixedrange=False),
+                xaxis_title="Date",
+                yaxis_title="Valeur"
+            )
+
             st.plotly_chart(fig, use_container_width=True)
 
-            st.download_button("📥 Télécharger CSV", y_pred.to_csv(), "forecast.csv")
+            st.download_button(
+                "📥 Télécharger CSV",
+                y_pred.to_csv(),
+                "forecast.csv"
+            )
