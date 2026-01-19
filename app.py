@@ -263,6 +263,8 @@ elif step == "4. Modélisation & Ajustement":
                     model = ARIMA(train, order=(p, d_val, q)).fit()
                 else:
                     model = SARIMAX(train, order=(p, d_val, q), seasonal_order=(P, D_val, Q, s)).fit(disp=False)
+                # 🔴 THIS LINE WAS MISSING
+                st.session_state.model_result = model
                 
                 preds = model.get_forecast(steps=len(test)).predicted_mean
                 conf_int = model.get_forecast(steps=len(test)).conf_int()
@@ -356,4 +358,5 @@ elif step == "6. Prévisions Futures":
             fig.add_trace(go.Scatter(x=y_pred.index, y=conf_int.iloc[:, 1], fill='tonexty', fillcolor='rgba(0,255,0,0.1)', line_color='rgba(0,0,0,0)', name="Confiance"))
             fig.update_layout(yaxis=dict(autorange=True, fixedrange=False))
             st.plotly_chart(fig, use_container_width=True)
+
             st.download_button("📥 Télécharger CSV", y_pred.to_csv(), "forecast.csv")
